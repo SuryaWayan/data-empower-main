@@ -14,7 +14,8 @@ data = None
 def main():
     global data
 
-    st.title("Data Visualization and Analysis Web App")
+    st.title("Data Visualization App")
+    st.subheader("CSV Upload and Dynamic Chart Generation")
 
     # CSV file upload
     uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
@@ -30,7 +31,7 @@ def main():
         st.write(f"Total Columns: {data.shape[1]}")
 
         columns = data.columns.tolist()
-        selected_columns = st.multiselect("Please select columns to display in a table format", columns)
+        selected_columns = st.multiselect("Please choose the columns you wish to display in table format, or skip this section if you prefer not to generate a table.", columns)
 
         # Interactive table generation
         if selected_columns:
@@ -58,6 +59,8 @@ def main():
                 with col1:
                     chart_type = st.selectbox(f"Select chart type for Chart {i+1}", ["Line", "Bar", "Scatter"])
                     # Setting "Number/Duration" as default X-axis
+                    st.write("Select columns for the X and Y axes")
+                    st.write("Only columns in **'NUMBER'** format are valid; using columns with **date or text** formats will result in ERRORS.")
                     x_column = st.selectbox(f"Select X-axis column for Chart {i+1}", columns, index=columns.index("X-Axis"))
                     y_columns = st.multiselect(f"Select Y-axis column(s) for Chart {i+1}", columns)
                     secondary_y = st.checkbox(f"Add secondary Y-axis for Chart {i+1}")
