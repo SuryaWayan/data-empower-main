@@ -14,8 +14,7 @@ data = None
 def main():
     global data
 
-    st.title("Data Visualization App")
-    st.subheader("CSV Upload and Dynamic Chart Generation")
+    st.title("Data Visualization and Analysis App")
 
     # CSV file upload
     uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
