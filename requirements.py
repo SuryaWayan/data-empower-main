@@ -52,6 +52,9 @@ def main():
             st.dataframe(data[selected_columns].head(num_rows))
 
         # Dynamic Chart Generation
+        st.subheader("")
+        st.subheader("")
+        st.subheader("")
         st.subheader("Dynamic Chart Generation")
 
         # Adding a new column "Number/Duration"
