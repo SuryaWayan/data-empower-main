@@ -1,7 +1,13 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import numpy as np
+import plotly.graph_objs as go
 from scipy.stats import linregress
+from scipy.optimize import curve_fit
+import plotly.graph_objects as go
+import plotly.express as px
+from sklearn.metrics import r2_score
 
 # Set page configuration
 st.set_page_config(page_title="Data Visualization App", layout="wide")
@@ -73,11 +79,10 @@ def main():
                 with col1:
                     chart_type = st.selectbox(f"Select chart type for Chart {i+1}", ["Line", "Bar", "Scatter"])
                     # Setting "Number/Duration" as default X-axis
-                    st.write("Select columns for the X and Y axes")
+                    st.write("Select columns for the X and Y axis")
                     st.write("Only columns in **'NUMBER'** format are valid; using columns with **date or text** formats will result in ERRORS.")
                     x_column = st.selectbox(f"Select X-axis column for Chart {i+1}", columns, index=columns.index("X-Axis"))
                     y_columns = st.multiselect(f"Select Y-axis column(s) for Chart {i+1}", columns)
-                    secondary_y = st.checkbox(f"Add secondary Y-axis for Chart {i+1}")
 
                     if x_column and y_columns:
                         x_min = data[x_column].min()
@@ -95,20 +100,25 @@ def main():
                         if x_start > x_end:
                             x_start, x_end = x_end, x_start
 
-                        # Sync slider with input values
-                        x_start, x_end = st.slider(f"Select X-axis range for Chart {i+1}", min_value=x_min, max_value=x_max, value=(x_start, x_end))
-
-                        # Update session state with current slider values
-                        st.session_state[start_input_key] = x_start
-                        st.session_state[end_input_key] = x_end
-
                         # Update number input fields based on slider value
-                        x_start = st.number_input(f"Enter X-axis start for Chart {i+1}", min_value=x_min, max_value=x_max, value=x_start)
-                        x_end = st.number_input(f"Enter X-axis end for Chart {i+1}", min_value=x_min, max_value=x_max, value=x_end)
+                        st.write("")
+                        st.write("")
+                        st.write(f"Select X-axis range using the following input fields")
+                        col_start, col_end = st.columns([1.5, 1.5])
+                        with col_start:
+                            x_start = st.number_input(f"Enter X-axis start for Chart {i+1}", min_value=x_min, max_value=x_max, value=x_start)
+                        with col_end:
+                            x_end = st.number_input(f"Enter X-axis end for Chart {i+1}", min_value=x_min, max_value=x_max, value=x_end)
 
                     trendline = st.checkbox(f"Add trendline for Chart {i+1}")
                     if trendline:
-                        trendline_type = st.selectbox(f"Select trendline type for Chart {i+1}", ["Linear", "Average"])
+                        col_a, col_b = st.columns([1.5, 1.5])
+                        with col_a:
+                            trendline_type = st.selectbox(f"Select trendline type", ["Linear", "Average", "Polynomial"])
+                            with col_b:
+                                if trendline_type == "Polynomial":
+                                    for y_column in y_columns:
+                                        degree = st.number_input(f"Degree for {y_column}", min_value=2, max_value=20, value=2)
 
                 with col_chart:
                     with st.container():
@@ -122,27 +132,37 @@ def main():
                             else:
                                 fig = px.scatter(filtered_data, x=x_column, y=y_columns)
 
-                            if secondary_y and len(y_columns) > 1:
-                                fig.update_layout(yaxis2=dict(title=y_columns[1], side="right", overlaying="y"))
-                                fig.update_traces(yaxis="y2", selector=dict(name=y_columns[1]))
-
                             if trendline:
-                                for y_column in y_columns:
-                                    if trendline_type == "Linear":
-                                        slope, intercept, r_value, _, _ = linregress(filtered_data[x_column], filtered_data[y_column])
-                                        fig.add_shape(type="line", x0=x_start, y0=slope*x_start+intercept,
-                                                      x1=x_end, y1=slope*x_end+intercept,
-                                                      line=dict(color="red", width=2, dash="dash"))
-                                        st.write(f"Linear Trendline for {y_column}: y = {slope:.2f}x + {intercept:.2f}, R-value: {r_value:.2f}")
-                                    elif trendline_type == "Average":
-                                        avg_y_value = filtered_data[y_column].mean()
-                                        fig.add_hline(y=avg_y_value, line_dash="dot", annotation_text=f"Avg {y_column} = {avg_y_value:.2f}", annotation_position="bottom right")
-                                        st.write(f"Average Trendline for {y_column}")
+                                for trace in fig.data:
+                                    if trace.name in y_columns:
+                                        color = trace.line.color if hasattr(trace.line, 'color') else trace.marker.color
+                                        if trendline_type == "Linear":
+                                             slope, intercept, _, _, _ = linregress(filtered_data[x_column], filtered_data[trace.name])
+                                             fig.add_shape(type="line", x0=x_start, y0=slope*x_start+intercept,
+                                                           x1=x_end, y1=slope*x_end+intercept,
+                                                           line=dict(color=color, width=2, dash="dash"))
+                                             y_predicted = slope * filtered_data[x_column] + intercept
+                                             r_squared = r2_score(filtered_data[trace.name], y_predicted)
+                                        elif trendline_type == "Average":
+                                            avg_y_value = filtered_data[trace.name].mean()
+                                            fig.add_hline(y=avg_y_value, line_dash="dash",
+                                                        annotation_text=f"Avg {trace.name} = {avg_y_value:.5f}",
+                                                        annotation_position="bottom right",
+                                                        line=dict(color=color)) 
+                                        elif trendline_type == "Polynomial":
+                                            coeffs = np.polyfit(filtered_data[x_column], filtered_data[trace.name], degree)
+                                            poly_function = np.poly1d(coeffs)
+                                            equation = " + ".join(f"{coeffs[i]:.8f} * x^{degree-i}" for i in range(degree+1))
+                                            x_values = np.linspace(x_start, x_end, 100)
+                                            y_values = poly_function(x_values)
+                                            r_squared = r2_score(filtered_data[trace.name], poly_function(filtered_data[x_column]))
+                                            fig.add_trace(go.Scatter(x=x_values, y=y_values, line_dash="dash",
+                                                                    name=f"Polynomial Trendline {degree} for {trace.name}",
+                                                                    line=dict(color=color))) 
 
-                            fig.update_layout(title=f"Chart {i+1}", xaxis_title=x_column, yaxis_title="Value", height=700)  # Adjust height here
+                            fig.update_layout(title=f"Chart {i+1}", xaxis_title=x_column, yaxis_title="Value", height=700) 
                             st.plotly_chart(fig, use_container_width=True)
                             st.markdown('<div class="chart-container"></div>', unsafe_allow_html=True)
-
 
                 with col2:
                     st.write(f"**Chart {i+1} Summary:**")
@@ -153,6 +173,15 @@ def main():
                         st.write("• **Max of**", y_column + ":", f"{filtered_data[y_column].max():.5f}")
                         st.write("• **Average of**", y_column + ":", f"{filtered_data[y_column].mean():.5f}")
                         st.write("• **Standard Deviation of**", y_column + ":", f"{filtered_data[y_column].std():.5f}")
+                        if trendline:
+                                for trace in fig.data:
+                                    if trace.name in y_columns:
+                                        if trendline_type == "Linear":
+                                            st.write(f"• **Linear Trendline for {trace.name}:** y = {slope:.5f}x + {intercept:.5f}, R-squared: {r_squared:.5f}")
+                                        elif trendline_type == "Polynomial":
+                                            st.write(f"• **Polynomial Trendline {degree} for {trace.name}:** y = {equation}, R-squared: {r_squared:.5f}")
+                    st.write("")
+                    st.write("")
 
 # Run the app
 if __name__ == "__main__":
